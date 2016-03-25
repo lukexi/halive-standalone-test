@@ -1,0 +1,48 @@
+#!/bin/sh
+
+rm -rf standalone/
+
+
+snapshot_pkg_root=$(stack path --snapshot-install-root | sed 's|\\|\\\\|g')
+local_pkg_root=$(stack path --local-install-root | sed 's|\\|\\\\|g')
+global_pkg_db_path=$(stack path --global-pkg-db|  sed 's|package.conf.d||g' | sed 's|\\|\\\\|g')
+
+mkdir -p standalone/packages/snapshot
+mkdir -p standalone/packages/local
+mkdir -p standalone/packages/ghc
+
+echo "Building..."
+stack install :standalone --local-bin-path=standalone/
+cp Foo.hs standalone/
+
+echo "Copying fake gcc..."
+cp -R mingw standalone/packages/ghc
+
+echo "Copying ghc package db..."
+cp -R $global_pkg_db_path standalone/packages/ghc
+
+echo "Copying snapshot package db..."
+cp -R $snapshot_pkg_root/lib standalone/packages/snapshot
+cp -R $snapshot_pkg_root/pkgdb standalone/packages/snapshot
+
+echo "Copying local package db..."
+cp -R $local_pkg_root/lib standalone/packages/local
+cp -R $local_pkg_root/pkgdb standalone/packages/local
+
+# in snapshot, replace all mentions of the absolute snapshot pkg dir with ${pkgroot}
+find standalone/packages/snapshot -name "*.conf" | xargs sed -i -e 's|'$snapshot_pkg_root'|${pkgroot}|g'
+ghc-pkg \
+   --package-db standalone/packages/ghc/lib/package.conf.d \
+   --package-db standalone/packages/snapshot/pkgdb \
+   recache
+
+# in local, replace all mentions of the absolute local pkg dir with ${pkgroot}
+find standalone/packages/local -name "*.conf" | xargs sed -i -e 's|'$local_pkg_root'|${pkgroot}|g'
+ghc-pkg \
+   --package-db standalone/packages/ghc/lib/package.conf.d \
+   --package-db standalone/packages/snapshot/pkgdb \
+   --package-db standalone/packages/local/pkgdb \
+   recache
+
+rm -rf .stack-work/
+(cd standalone/ && ./standalone.exe)

@@ -1,0 +1,4 @@
+resolver: nightly-2016-02-02
+packages:
+- '.'
+- ../halive
